@@ -1,0 +1,59 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% load i18n wagtailadmin_tags static %}
+
+{% block main_content %}
+
+    <h1>
+        {% translate "Granularity Codes" %}
+    </h1>
+
+    <div style="margin-top: 40px">
+        {% if data %}
+            <table class="listing">
+                <thead>
+                <tr>
+                    <th>
+                        {% translate "Code" %}
+                    </th>
+                    <th>
+                        {% translate "Label" %}
+                    </th>
+                    <th>
+                        {% translate "Description" %}
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for gran in data %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'adl_pulsoweb_plugin_granularity_observations' connection_id gran.code %}">
+                                {{ gran.code }}
+                            </a>
+                        </td>
+                        <td>
+                            {{ gran.label }}
+                        </td>
+                        <td>
+                            {{ gran.description }}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+{% endblock %}
+
+{% block extra_css %}
+    {{ block.super }}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% block extra_js %}
+
+{% endblock %}

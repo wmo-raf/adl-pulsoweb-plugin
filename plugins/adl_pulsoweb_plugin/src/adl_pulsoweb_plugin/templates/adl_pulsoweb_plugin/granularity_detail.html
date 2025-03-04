@@ -1,0 +1,66 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% load i18n wagtailadmin_tags static %}
+
+{% block main_content %}
+
+    <div style="margin-top: 40px">
+        {% if data %}
+
+            <h1>
+                {% translate "Observation Codes for Granularity:" %} {{ gran.label }} ({{ gran.description }})
+            </h1>
+
+            <table class="listing">
+                <thead>
+                <tr>
+                    <th style="min-width: 100px">
+                        {% translate "Code" %}
+                    </th>
+                    <th>
+                        {% translate "Label" %}
+                    </th>
+                    <th>
+                        {% translate "Unit" %}
+                    </th>
+                    <th>
+                        {% translate "Description" %}
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for obs in data %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'adl_pulsoweb_plugin_stations_by_obs' connection_id obs.code %}">
+                                {{ obs.code }}
+                            </a>
+                        </td>
+                        <td>
+                            {{ obs.label }}
+                        </td>
+                        <td>
+                            {{ obs.unit }}
+                        </td>
+                        <td>
+                            {{ obs.description }}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+{% endblock %}
+
+{% block extra_css %}
+    {{ block.super }}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% block extra_js %}
+
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% load i18n wagtailadmin_tags static %}
+
+{% block main_content %}
+    <div style="margin-top: 40px">
+        <h1>
+            {% translate "Stations Reporting Observation" %} '{{ obs.label }}'
+        </h1>
+
+        <div style="margin: 20px 0;display: flex;font-size: 16px;">
+            <div style="font-weight: bold;">{% translate "Number of stations: " %}</div>
+            <div style="margin-left: 10px">{{ stations|length }}</div>
+        </div>
+        <table class="listing">
+            <thead>
+            <tr>
+                <th style="min-width: 100px">
+                    {% translate "Code" %}
+                </th>
+                <th>
+                    {% translate "Name" %}
+                </th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for station in stations %}
+                <tr>
+                    <td>
+                        {{ station.code }}
+                    </td>
+                    <td>
+                        {{ station.name }}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

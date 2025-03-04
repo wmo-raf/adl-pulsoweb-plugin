@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from adl.core.models import ObservationRecord
 from adl.core.registries import Plugin
@@ -32,12 +33,8 @@ class PulsoWebPlugin(Plugin):
         
         logger.debug(f"[ADL_PULSOWEB_PLUGIN] Found {len(station_links)} station links for {network_conn_name}.")
         
-        self.client = PulsoWebClient(
-            wsdl_url=self.network_connection.wsdl_url,
-            username=self.network_connection.username,
-            password=self.network_connection.password,
-            station_id=self.network_connection.station_id
-        )
+        self.client = PulsoWebClient(self.network_connection.api_base_url, self.network_connection.api_token,
+                                     self.network_connection.id)
         
         stations_records_count = {}
         
@@ -54,54 +51,80 @@ class PulsoWebPlugin(Plugin):
             
             stations_records_count[station_link.station.id] = station_link_records_count
         
-        # close connection
-        self.client.close()
-        
         return stations_records_count
     
     def process_station_link(self, station_link):
-        network_conn_name = self.network_connection.name
         station_name = station_link.station.name
+        observation_codes = self.network_connection.observation_codes
         
         logger.debug(f"[ADL_PULSOWEB_PLUGIN] Getting latest data for {station_name}.")
         
-        latest_record = self.client.get_station_latest_data(
-            station_id=station_link.pulsoweb_station_id,
-            param_type=self.network_connection.parameter_type,
-            duration=self.network_connection.duration
-        )
+        station_code = station_link.pulsoweb_station_code
+        station_timezone = station_link.timezone
         
-        timestamp = latest_record.get("TIMESTAMP")
+        # get the end date(current time now) in the station timezone
+        end_date = dj_timezone.localtime(timezone=station_timezone)
+        # set to end_date of the current hour
+        end_date = end_date.replace(minute=0, second=0, microsecond=0)
         
-        if not timestamp:
-            logger.debug(f"[ADL_FTP_PLUGIN] No timestamp found in record {latest_record}")
-            return
+        # use the start date of the station link if available
+        if station_link.start_date:
+            start_date = dj_timezone.localtime(station_link.start_date, timezone=station_timezone)
+        else:
+            # if not available, set the start date to 1 hour before the end date
+            start_date = end_date - timedelta(hours=1)
         
-        utc_obs_date = dj_timezone.make_aware(timestamp, station_link.timezone)
+        # pulsoweb API expects dates as UTC string format
+        start_date_str = start_date.strftime("%Y-%m-%dT%H:%M:%S")
+        end_date_str = end_date.strftime("%Y-%m-%dT%H:%M:%S")
         
-        for variable_mapping in self.network_connection.variable_mappings.all():
-            adl_parameter = variable_mapping.adl_parameter
-            pulsoweb_parameter_name = variable_mapping.pulsoweb_parameter_name
-            pulsoweb_parameter_unit = variable_mapping.pulsoweb_parameter_unit
+        records = self.client.get_observation_data(station_code, observation_codes, start_date_str, end_date_str)
+        
+        observation_records = []
+        
+        for record in records:
+            timestamp = record.get("TIMESTAMP")
             
-            value = latest_record.get(pulsoweb_parameter_name)
+            if not timestamp:
+                logger.debug(f"[ADL_FTP_PLUGIN] No timestamp found in record {record}")
+                return
             
-            # is None or nan
-            if value is None:
-                logger.debug(f"[ADL_PULSOWEB_PLUGIN] No data record found for parameter {adl_parameter.name}")
-                continue
+            utc_obs_date = dj_timezone.make_aware(timestamp, station_link.timezone)
             
-            if adl_parameter.unit != pulsoweb_parameter_unit:
-                value = adl_parameter.convert_value_from_units(value, pulsoweb_parameter_unit)
-            
-            record_data = {
-                "station": station_link.station,
-                "parameter": adl_parameter,
-                "time": utc_obs_date,
-                "value": value,
-                "connection": station_link.network_connection,
-            }
-            
-            ObservationRecord.objects.create(**record_data)
-            
-            return 1
+            for variable_mapping in self.network_connection.variable_mappings.all():
+                adl_parameter = variable_mapping.adl_parameter
+                pulsoweb_parameter_code = variable_mapping.pulsoweb_parameter_code
+                pulsoweb_parameter_unit = variable_mapping.pulsoweb_parameter_unit
+                
+                value = record.get(pulsoweb_parameter_code)
+                
+                if value is None:
+                    logger.debug(f"[ADL_PULSOWEB_PLUGIN] No data record found for parameter {adl_parameter.name}")
+                    continue
+                
+                if adl_parameter.unit != pulsoweb_parameter_unit:
+                    value = adl_parameter.convert_value_from_units(value, pulsoweb_parameter_unit)
+                
+                record_data = {
+                    "station": station_link.station,
+                    "parameter": adl_parameter,
+                    "time": utc_obs_date,
+                    "value": value,
+                    "connection": station_link.network_connection,
+                }
+                
+                param_obs_record = ObservationRecord(**record_data)
+                observation_records.append(param_obs_record)
+        
+        records_count = len(observation_records)
+        
+        if observation_records:
+            logger.debug(f"[ADL_PULSOWEB_PLUGIN] Saving {records_count} records for {station_name}.")
+            ObservationRecord.objects.bulk_create(
+                observation_records,
+                update_conflicts=True,
+                update_fields=["value"],
+                unique_fields=["station", "parameter", "time", "connection"]
+            )
+        
+        return records_count
