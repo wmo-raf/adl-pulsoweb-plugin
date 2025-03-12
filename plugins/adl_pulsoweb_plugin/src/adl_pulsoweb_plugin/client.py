@@ -32,18 +32,28 @@ class PulsoWebClient:
         stations = context["stations"]
         return stations
     
-    def get_observations_for_granular(self, gran_code):
+    def get_observations_for_granular(self, gran_code, include_stations_count=True):
         observations_list = self.get_observations_metadata()
-        gran_obs = []
+        gran_obs_list = []
+        
         for obs in observations_list:
             if str(obs["granularity"]) == str(gran_code):
-                gran_obs.append({
+                gran_obs = {
                     "code": obs["code"],
                     "label": obs["label"],
                     "unit": obs["unit"],
                     "description": obs["description"],
-                })
-        return gran_obs
+                }
+                if include_stations_count:
+                    stations_count = len(self.get_stations_with_obs(obs["code"]))
+                    gran_obs["stations_count"] = stations_count
+                gran_obs_list.append(gran_obs)
+        
+        if include_stations_count:
+            # sort by stations count
+            gran_obs_list = sorted(gran_obs_list, key=lambda x: x["stations_count"], reverse=True)
+        
+        return gran_obs_list
     
     def get_stations_with_obs(self, obs_code):
         stations = self.get_stations_metadata()

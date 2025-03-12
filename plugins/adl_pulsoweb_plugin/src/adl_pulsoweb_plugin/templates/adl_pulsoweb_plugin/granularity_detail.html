@@ -8,10 +8,13 @@
         {% if data %}
 
             <h1>
-                {% translate "Observation Codes for Granularity:" %} {{ gran.label }} ({{ gran.description }})
+                {% translate "Observation Codes for Granularity:" %} {{ gran.code }}
+                {% if gran.label %} - {{ gran.label }} {% endif %}
+                {% if gran.description %} ({{ gran.description }}){% endif %}
+
             </h1>
 
-            <table class="listing">
+            <table class="listing tablesorter" id="observationTable">
                 <thead>
                 <tr>
                     <th style="min-width: 100px">
@@ -22,6 +25,9 @@
                     </th>
                     <th>
                         {% translate "Unit" %}
+                    </th>
+                    <th>
+                        {% translate "Stations" %}
                     </th>
                     <th>
                         {% translate "Description" %}
@@ -43,6 +49,9 @@
                             {{ obs.unit }}
                         </td>
                         <td>
+                            {{ obs.stations_count }}
+                        </td>
+                        <td>
                             {{ obs.description }}
                         </td>
                     </tr>
@@ -56,11 +65,22 @@
 
 {% block extra_css %}
     {{ block.super }}
-    <style>
-
-    </style>
+    <link rel="stylesheet" href="{% static 'adl_pulsoweb_plugin/css/theme.default.css' %}">
 {% endblock %}
 
 {% block extra_js %}
 
+{% endblock %}
+
+{% block js %}
+    {{ block.super }}
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery.tablesorter.min.js' %}"></script>
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery.tablesorter.widgets.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            $("#observationTable").tablesorter({theme: 'default'});
+        });
+
+    </script>
 {% endblock %}

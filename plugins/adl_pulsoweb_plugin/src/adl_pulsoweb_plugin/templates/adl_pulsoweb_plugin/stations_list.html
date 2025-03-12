@@ -12,7 +12,7 @@
             <div style="font-weight: bold;">{% translate "Number of stations: " %}</div>
             <div style="margin-left: 10px">{{ stations|length }}</div>
         </div>
-        <table class="listing">
+        <table class="listing tablesorter" id="stationsTable">
             <thead>
             <tr>
                 <th style="min-width: 100px">
@@ -37,4 +37,26 @@
             </tbody>
         </table>
     </div>
+{% endblock %}
+
+{% block extra_css %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'adl_pulsoweb_plugin/css/theme.default.css' %}">
+{% endblock %}
+
+{% block extra_js %}
+
+{% endblock %}
+
+{% block js %}
+    {{ block.super }}
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery.tablesorter.min.js' %}"></script>
+    <script src="{% static 'adl_pulsoweb_plugin/js/jquery.tablesorter.widgets.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            $("#stationsTable").tablesorter({theme: 'default'});
+        });
+
+    </script>
 {% endblock %}
