@@ -13,7 +13,8 @@ from .validators import validate_start_date
 
 class PulsoWebConnection(NetworkConnection):
     station_link_model_string_label = "adl_pulsoweb_plugin.PulsoWebStationLink"
-    api_base_url = models.CharField(max_length=255, verbose_name=_("API Base URL"))
+    api_base_url = models.CharField(max_length=255, default="https://app.pulsonic.com/rest",
+                                    verbose_name=_("API Base URL"))
     api_token = models.CharField(max_length=255, verbose_name=_("API Token"))
     
     panels = NetworkConnection.panels + [
@@ -57,6 +58,20 @@ class PulsoWebVariableMapping(Orderable):
         FieldPanel("pulsoweb_parameter_code"),
         FieldPanel("pulsoweb_parameter_unit"),
     ]
+    
+    @property
+    def source_parameter_name(self):
+        """
+        Returns the shortcode of the PulsoWeb variable.
+        """
+        return self.pulsoweb_parameter_code
+    
+    @property
+    def source_parameter_unit(self):
+        """
+        Returns the unit of the PulsoWeb variable.
+        """
+        return self.pulsoweb_parameter_unit
 
 
 class PulsoWebStationLink(StationLink):
@@ -80,3 +95,24 @@ class PulsoWebStationLink(StationLink):
     
     def __str__(self):
         return f"{self.pulsoweb_station_code} - {self.station} - {self.station.wigos_id}"
+    
+    def get_variable_mappings(self):
+        """
+        Returns the variable mappings for this station link.
+        """
+        
+        connection = self.network_connection
+        return connection.variable_mappings.all()
+    
+    def get_first_collection_date(self):
+        """
+        Returns the first collection date for this station link.
+        Returns None if no start date is set.
+        """
+        return self.start_date
+    
+    def get_timezone(self):
+        """
+        Returns the timezone for this station link.
+        """
+        return self.timezone
