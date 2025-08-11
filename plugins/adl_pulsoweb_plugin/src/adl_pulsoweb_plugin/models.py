@@ -76,8 +76,6 @@ class PulsoWebVariableMapping(Orderable):
 
 class PulsoWebStationLink(StationLink):
     pulsoweb_station_code = models.PositiveIntegerField(verbose_name=_("PulsoWeb Station ID"))
-    timezone = TimeZoneField(default='UTC', verbose_name=_("Station Timezone"),
-                             help_text=_("Timezone used by the station for recording observations"))
     start_date = models.DateTimeField(blank=True, null=True, validators=[validate_start_date],
                                       verbose_name=_("Start Date"),
                                       help_text=_("Start date for data pulling. Select a past date to include the "
@@ -85,7 +83,6 @@ class PulsoWebStationLink(StationLink):
     
     panels = StationLink.panels + [
         FieldPanel("pulsoweb_station_code"),
-        FieldPanel("timezone"),
         FieldPanel("start_date"),
     ]
     
@@ -110,9 +107,3 @@ class PulsoWebStationLink(StationLink):
         Returns None if no start date is set.
         """
         return self.start_date
-    
-    def get_timezone(self):
-        """
-        Returns the timezone for this station link.
-        """
-        return self.timezone

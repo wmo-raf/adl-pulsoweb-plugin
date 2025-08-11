@@ -17,7 +17,7 @@ class PulsoWebPlugin(Plugin):
         return []
     
     def get_default_end_date(self, station_link):
-        timezone = station_link.get_timezone()
+        timezone = station_link.timezone
         
         # get the end date(current time now) in the station timezone
         end_date = dj_timezone.localtime(timezone=timezone)
