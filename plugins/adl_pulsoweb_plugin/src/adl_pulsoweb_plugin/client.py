@@ -1,7 +1,6 @@
 import datetime
 
 import requests
-
 from django.core.cache import cache
 
 
@@ -178,7 +177,7 @@ class PulsoWebClient:
             for item in obs_data:
                 date = item["date"]
                 if date not in records:
-                    records[date] = {"TIMESTAMP": datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S")}
+                    records[date] = {"observation_time": datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S")}
                 records[date][obs_code] = item["value"]
         
         return list(records.values())

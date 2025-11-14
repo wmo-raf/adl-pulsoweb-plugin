@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 
 PROJECT_DIR = os.path.dirname(__file__)
 REQUIREMENTS_DIR = os.path.join(PROJECT_DIR, "requirements")
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 
 def get_requirements(env):
