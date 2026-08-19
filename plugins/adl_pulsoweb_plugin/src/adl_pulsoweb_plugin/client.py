@@ -8,11 +8,17 @@ class PulsoWebConnectionError(Exception):
     pass
 
 
+# Connect and read timeouts applied to every request. Without a bound, a hung
+# source wedges the ingestion worker instead of failing the run.
+DEFAULT_TIMEOUT = (10, 60)
+
+
 class PulsoWebClient:
-    def __init__(self, baseurl, token, connection_id):
+    def __init__(self, baseurl, token, connection_id, timeout=None):
         self.baseurl = baseurl
         self.token = token
         self.connection_id = connection_id
+        self.timeout = DEFAULT_TIMEOUT if timeout is None else timeout
 
     def get_observations_metadata(self):
         context = self.get_context()
@@ -129,7 +135,9 @@ class PulsoWebClient:
         }
 
         url = f"{self.baseurl}/{path}/"
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=self.timeout)
+        response.raise_for_status()
+
         return response.json()
 
     def get_granularities(self):
