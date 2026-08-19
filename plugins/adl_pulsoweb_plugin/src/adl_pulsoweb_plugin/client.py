@@ -5,10 +5,6 @@ from django.core.cache import cache
 from requests.adapters import HTTPAdapter, Retry
 
 
-class PulsoWebConnectionError(Exception):
-    pass
-
-
 # Connect and read timeouts applied to every request. Without a bound, a hung
 # source wedges the ingestion worker instead of failing the run.
 DEFAULT_TIMEOUT = (10, 60)
@@ -171,7 +167,21 @@ class PulsoWebClient:
 
         url = f"{self.baseurl}/{path}/"
         response = self._send_post(url, payload)
-        response.raise_for_status()
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            category = category_for_status(response.status_code)
+
+            # Stamped in place, so the original type survives for core's own
+            # type table and the traceback is kept. A status carrying no
+            # honest category is left unstamped: declining falls through to
+            # core's read-time tier, which stays revisable.
+            if category:
+                e.adl_category = category
+                e.adl_layer = 5
+
+            raise
 
         return response.json()
 
@@ -234,6 +244,15 @@ class PulsoWebClient:
         }
 
         response = self.post(path, payload)
+
+        # The raw items the response carried, counted after parsing and before
+        # the per-timestamp collapse below. Not len(records): that is
+        # post-conversion, would duplicate records_count, and moves with our
+        # own reshaping — so a bug of ours would read as a source fault. The
+        # payload carries from/to, so the source restricts to the window and
+        # no local bound applies.
+        sources_count = sum(len(obs_data) for obs_data in response.values())
+
         records = {}
 
         for obs_code, obs_data in response.items():
@@ -243,7 +262,7 @@ class PulsoWebClient:
                     records[date] = {"observation_time": datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S")}
                 records[date][obs_code] = item["value"]
 
-        return list(records.values())
+        return list(records.values()), sources_count
 
     def get_logs(self, start_date, end_date):
         path = "get_logs"

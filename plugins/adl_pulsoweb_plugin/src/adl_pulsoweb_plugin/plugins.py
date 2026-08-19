@@ -42,6 +42,15 @@ class PulsoWebPlugin(Plugin):
 
         station_code = station_link.pulsoweb_station_code
 
-        records = pulsoweb_client.get_observation_data(station_code, observation_codes, start_date_str, end_date_str)
+        records, sources_count = pulsoweb_client.get_observation_data(station_code, observation_codes,
+                                                                      start_date_str, end_date_str)
+
+        # Committed only once a response is in hand and parsed: a call that
+        # raised leaves this None, and core abstains rather than reading a 0
+        # as "the source offered nothing".
+        if station_link.adl_sources_count is None:
+            station_link.adl_sources_count = 0
+
+        station_link.adl_sources_count += sources_count
 
         return records
