@@ -1,3 +1,6 @@
+from urllib.parse import urlparse
+
+import requests
 from adl.core.models import DataParameter, Unit
 from adl.core.models import NetworkConnection, StationLink
 from django.db import models
@@ -7,7 +10,7 @@ from modelcluster.fields import ParentalKey
 from wagtail.admin.panels import MultiFieldPanel, FieldPanel, InlinePanel
 from wagtail.models import Orderable
 
-from .client import PulsoWebClient
+from .client import CONTEXT_PATH, PulsoWebClient, category_for_status
 from .validators import validate_start_date
 
 
@@ -47,6 +50,109 @@ class PulsoWebConnection(NetworkConnection):
             use_cache=use_cache,
             timeout=timeout,
             retries=retries,
+        )
+
+    @property
+    def source_host(self):
+        """
+        The host the data calls dial, for messages that must never carry a
+        full URL.
+        """
+
+        return urlparse(self.api_base_url).hostname
+
+    @property
+    def context_path(self):
+        """The URL path get_context() dials, for messages."""
+
+        base_path = urlparse(self.api_base_url).path.rstrip("/")
+
+        return f"{base_path}/{CONTEXT_PATH}/"
+
+    def get_source_endpoint(self):
+        """
+        The (host, port) core's DNS -> TCP probe dials (layer 4).
+
+        Returns None where the configured base URL names no host: a wrong
+        host is far worse than no host, because it produces blocking layer-4
+        failure evidence and sends the operator hunting a network fault that
+        does not exist.
+        """
+
+        parsed = urlparse(self.api_base_url)
+
+        if not parsed.hostname:
+            return None
+
+        return parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    def check_source(self):
+        """
+        Ask whether the source accepts our credentials and offers data
+        (layer 5 of the ingestion diagnostic).
+        """
+
+        # Lazy: this module does not exist on a core release predating the
+        # source-check contracts, and on such a core this method is never
+        # called.
+        from adl.core.source_checks import SourceCheckResult, SourceCheckStatus
+
+        try:
+            # Client construction is inside the guarded region, so a
+            # configuration fault surfaces as a check failure rather than as
+            # an unhandled exception.
+            client = self.get_api_client(use_cache=False, timeout=5, retries=0)
+            context = client.get_context()
+        except requests.HTTPError as e:
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                category=category_for_status(e.response.status_code),
+                message=_("%(host)s returned HTTP %(code)s for %(path)s.") % {
+                    "host": self.source_host,
+                    "code": e.response.status_code,
+                    "path": self.context_path,
+                },
+            )
+        except requests.exceptions.JSONDecodeError:
+            # The host answered, so "could not be reached" would misdirect —
+            # but a body that will not parse carries no code, so the category
+            # is still declined.
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                message=_("%(host)s answered %(path)s with a body that was "
+                          "not JSON.") % {
+                    "host": self.source_host,
+                    "path": self.context_path,
+                },
+            )
+        except requests.RequestException as e:
+            # The server sent no code — a connection error, a read timeout, a
+            # body that would not parse. Decline the category.
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                message=_("%(host)s could not be reached: %(error)s") % {
+                    "host": self.source_host,
+                    "error": e,
+                },
+            )
+
+        # OK is claimed from a parsed body carrying the key the call exists to
+        # return, never a bare 2xx: an expired session that redirects to a
+        # login page arrives as a clean 200.
+        if not isinstance(context, dict) or "stations" not in context:
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                message=_("%(host)s answered but the response was not a "
+                          "PulsoWeb context.") % {"host": self.source_host},
+            )
+
+        return SourceCheckResult(
+            status=SourceCheckStatus.OK,
+            message=_("%(host)s accepted our API token and returned "
+                      "%(count)s station(s).") % {
+                "host": self.source_host,
+                "count": len(context["stations"]),
+            },
         )
 
     def get_extra_model_admin_links(self):
