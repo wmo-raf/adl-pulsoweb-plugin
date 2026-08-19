@@ -16,6 +16,7 @@ Surfaces this plugin declines get no test: asserting that core still returns
 """
 
 import ast
+import datetime
 import os
 from unittest import mock
 
@@ -25,6 +26,7 @@ from django.test import SimpleTestCase
 
 from adl_pulsoweb_plugin.client import PulsoWebClient
 from adl_pulsoweb_plugin.models import PulsoWebConnection, PulsoWebStationLink
+from adl_pulsoweb_plugin.plugins import PulsoWebPlugin
 
 CONTEXT = {"stations": [{"code": 5, "name": "Nairobi"}], "observations": [], "granularities": []}
 
@@ -367,6 +369,186 @@ class ClientTests(SimpleTestCase):
             client.get_context()
 
         self.assertEqual(post.call_count, 1)
+
+
+class ExceptionStampingTests(SimpleTestCase):
+    """`post()` is the single boundary every call routes through, and the one
+    place holding the status code, so it is where the stamp lives."""
+
+    def post_and_capture(self, status_code):
+        client = PulsoWebClient("https://app.pulsonic.com/rest", "a-token", 1)
+
+        response = mock.Mock()
+        response.status_code = status_code
+        response.raise_for_status.side_effect = http_error(status_code)
+
+        with mock.patch("requests.post", return_value=response):
+            with self.assertRaises(requests.HTTPError) as caught:
+                client.post("get_context")
+
+        return caught.exception
+
+    def test_classified_statuses_are_stamped_at_layer_5(self):
+        # A code from the server is proof the server answered, so every
+        # category derived from one is layer 5.
+        for status_code, category in [
+            (401, "AUTH_FAILED"),
+            (403, "PERMISSION_DENIED"),
+            (404, "PATH_NOT_FOUND"),
+            (500, "PROTOCOL_ERROR"),
+            (502, "PROTOCOL_ERROR"),
+        ]:
+            with self.subTest(status_code=status_code):
+                error = self.post_and_capture(status_code)
+
+                self.assertEqual(error.adl_category, category)
+                self.assertEqual(error.adl_layer, 5)
+
+    def test_declined_statuses_are_left_unstamped(self):
+        # Declining leaves core's read-time tier free to classify the row
+        # later; a write-time stamp would suppress it permanently.
+        for status_code in (400, 422, 429, 302):
+            with self.subTest(status_code=status_code):
+                error = self.post_and_capture(status_code)
+
+                self.assertFalse(hasattr(error, "adl_category"))
+                self.assertFalse(hasattr(error, "adl_layer"))
+
+    def test_codeless_errors_propagate_unwrapped(self):
+        # Core already resolves ConnectionError and ReadTimeout from the type
+        # alone. Wrapping them in a plugin type would delete that.
+        for error in (requests.ConnectionError("refused"),
+                      requests.ReadTimeout("timed out")):
+            with self.subTest(error=type(error).__name__):
+                client = PulsoWebClient("https://app.pulsonic.com/rest", "a-token", 1)
+
+                with mock.patch("requests.post", side_effect=error):
+                    with self.assertRaises(type(error)) as caught:
+                        client.post("get_context")
+
+                self.assertFalse(hasattr(caught.exception, "adl_category"))
+
+
+class ConnectionStub:
+    """The connection as get_station_data() duck-types it: a name, a client
+    factory and the configured observation codes. `observation_codes` is a
+    property on the real model and reads variable mappings from the database,
+    which these tests must not touch."""
+
+    name = "PulsoWeb"
+    observation_codes = ["TEMP", "RH"]
+
+    def __init__(self, client):
+        self.client = client
+        self.get_api_client = mock.Mock(return_value=client)
+
+
+class StationLinkStub:
+    """A station link with no ORM behind it. Core re-initialises
+    `adl_sources_count` to None at the start of every run."""
+
+    def __init__(self, connection=None, code=5):
+        self.network_connection = connection
+        self.pulsoweb_station_code = code
+        self.adl_sources_count = None
+
+
+def observation_response(client, response):
+    """Stubs the client's transport so get_observation_data() parses
+    `response`."""
+
+    return mock.patch.object(client, "post", return_value=response)
+
+
+class SourcesCountTests(SimpleTestCase):
+    """`adl_sources_count` says the source offered nothing, as distinct from
+    us mishandling what it offered."""
+
+    # Three raw items across two observation codes, collapsing into two
+    # per-timestamp records.
+    RESPONSE = {
+        "TEMP": [{"date": "2026-08-19T10:00:00", "value": 21.0},
+                 {"date": "2026-08-19T11:00:00", "value": 22.0}],
+        "RH": [{"date": "2026-08-19T10:00:00", "value": 60.0}],
+    }
+
+    def get_data(self, response):
+        client = PulsoWebClient("https://app.pulsonic.com/rest", "a-token", 1)
+
+        with observation_response(client, response):
+            return client.get_observation_data(5, ["TEMP", "RH"], "from", "to")
+
+    def test_counts_raw_items_and_not_records(self):
+        records, sources_count = self.get_data(self.RESPONSE)
+
+        self.assertEqual(sources_count, 3)
+        self.assertEqual(len(records), 2)
+
+    def test_an_empty_response_counts_zero(self):
+        records, sources_count = self.get_data({"TEMP": [], "RH": []})
+
+        self.assertEqual(sources_count, 0)
+        self.assertEqual(records, [])
+
+    def make_plugin_call(self, station_link, response=None, error=None):
+        client = mock.Mock(spec=PulsoWebClient)
+
+        if error is not None:
+            client.get_observation_data.side_effect = error
+        else:
+            client.get_observation_data.return_value = response
+
+        station_link.network_connection = ConnectionStub(client)
+
+        start = datetime.datetime(2026, 8, 19, 10, 0)
+        end = datetime.datetime(2026, 8, 19, 11, 0)
+
+        return PulsoWebPlugin().get_station_data(station_link, start, end)
+
+    def test_the_count_is_assigned_in_get_station_data(self):
+        station_link = StationLinkStub()
+
+        self.make_plugin_call(station_link, response=([{"observation_time": None}], 3))
+
+        self.assertEqual(station_link.adl_sources_count, 3)
+
+    def test_the_count_accumulates_across_calls(self):
+        station_link = StationLinkStub()
+
+        self.make_plugin_call(station_link, response=([], 2))
+        self.make_plugin_call(station_link, response=([], 4))
+
+        self.assertEqual(station_link.adl_sources_count, 6)
+
+    def test_an_answered_but_empty_response_commits_zero(self):
+        station_link = StationLinkStub()
+
+        self.make_plugin_call(station_link, response=([], 0))
+
+        self.assertEqual(station_link.adl_sources_count, 0)
+
+    def test_a_failed_call_leaves_the_count_unset(self):
+        # None is the honest answer for a run that never got an answer: core
+        # abstains on NULL, where a 0 would accuse the source of offering
+        # nothing.
+        station_link = StationLinkStub()
+
+        with self.assertRaises(requests.ConnectionError):
+            self.make_plugin_call(station_link, error=requests.ConnectionError("refused"))
+
+        self.assertIsNone(station_link.adl_sources_count)
+
+    def test_a_failure_after_a_successful_call_keeps_the_earlier_count(self):
+        # A count above zero on a FAILED row acquits the source: we did see it
+        # offering data before the run broke.
+        station_link = StationLinkStub()
+
+        self.make_plugin_call(station_link, response=([], 3))
+
+        with self.assertRaises(requests.ConnectionError):
+            self.make_plugin_call(station_link, error=requests.ConnectionError("refused"))
+
+        self.assertEqual(station_link.adl_sources_count, 3)
 
 
 class OlderCoreImportSafetyTests(SimpleTestCase):
