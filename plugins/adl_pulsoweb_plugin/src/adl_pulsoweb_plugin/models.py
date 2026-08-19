@@ -219,6 +219,63 @@ class PulsoWebStationLink(StationLink):
     def __str__(self):
         return f"{self.pulsoweb_station_code} - {self.station} - {self.station.wigos_id}"
 
+    def check_station_source(self):
+        """
+        Ask whether this station's upstream identifier resolves at the source
+        (layer 5, station-scoped).
+        """
+
+        # Lazy, per the same rule as check_source().
+        from adl.core.source_checks import SourceCheckResult, SourceCheckStatus
+
+        connection = self.network_connection
+
+        try:
+            # The cache is bypassed over the whole check, not just the failing
+            # branch: an hour-old list reports a station added upstream since
+            # as absent, which is a confident false PATH_NOT_FOUND, and one
+            # deleted upstream as present.
+            client = connection.get_api_client(use_cache=False, timeout=5, retries=0)
+            stations = client.get_stations_metadata()
+        except requests.RequestException as e:
+            # No category: a failure to read the list proves nothing about
+            # this station, and PATH_NOT_FOUND is claimed on positive proof
+            # only. Never swallowed into OK.
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                message=_("Could not read the station list from "
+                          "%(host)s: %(error)s") % {
+                    "host": connection.source_host,
+                    "error": e,
+                },
+            )
+
+        station_code = str(self.pulsoweb_station_code)
+        match = next((s for s in stations if str(s.get("code")) == station_code), None)
+
+        if match is None:
+            # Positive proof: the list was received and parsed, and this
+            # station is not in it.
+            return SourceCheckResult(
+                status=SourceCheckStatus.FAILED,
+                category="PATH_NOT_FOUND",
+                message=_("Station %(code)s was not found in the source's "
+                          "station list.") % {"code": station_code},
+            )
+
+        label = match.get("name")
+
+        if label:
+            message = _("Station %(code)s found upstream as \"%(label)s\".") % {
+                "code": station_code,
+                "label": label,
+            }
+        else:
+            message = _("Station %(code)s found in the source's station "
+                        "list.") % {"code": station_code}
+
+        return SourceCheckResult(status=SourceCheckStatus.OK, message=message)
+
     def get_variable_mappings(self):
         """
         Returns the variable mappings for this station link.
