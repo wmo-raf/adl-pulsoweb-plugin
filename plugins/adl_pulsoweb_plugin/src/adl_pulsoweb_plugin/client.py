@@ -2,6 +2,7 @@ import datetime
 
 import requests
 from django.core.cache import cache
+from requests.adapters import HTTPAdapter, Retry
 
 
 class PulsoWebConnectionError(Exception):
@@ -12,13 +13,17 @@ class PulsoWebConnectionError(Exception):
 # source wedges the ingestion worker instead of failing the run.
 DEFAULT_TIMEOUT = (10, 60)
 
+CONTEXT_CACHE_TIMEOUT = 3600
+
 
 class PulsoWebClient:
-    def __init__(self, baseurl, token, connection_id, timeout=None):
+    def __init__(self, baseurl, token, connection_id, use_cache=True, timeout=None, retries=None):
         self.baseurl = baseurl
         self.token = token
         self.connection_id = connection_id
+        self.use_cache = use_cache
         self.timeout = DEFAULT_TIMEOUT if timeout is None else timeout
+        self.retries = retries
 
     def get_observations_metadata(self):
         context = self.get_context()
@@ -135,10 +140,25 @@ class PulsoWebClient:
         }
 
         url = f"{self.baseurl}/{path}/"
-        response = requests.post(url, json=payload, timeout=self.timeout)
+        response = self._send_post(url, payload)
         response.raise_for_status()
 
         return response.json()
+
+    def _send_post(self, url, payload):
+        if self.retries is None:
+            return requests.post(url, json=payload, timeout=self.timeout)
+
+        # allowed_methods=False applies the policy to POST too, which urllib3's
+        # default set excludes. Every call this client makes is a POST.
+        retry = Retry(total=self.retries, allowed_methods=False)
+        adapter = HTTPAdapter(max_retries=retry)
+
+        with requests.Session() as session:
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+
+            return session.post(url, json=payload, timeout=self.timeout)
 
     def get_granularities(self):
         context = self.get_context()
@@ -156,16 +176,22 @@ class PulsoWebClient:
 
     def get_context(self):
         cache_key = f"pulsoweb_context_{self.connection_id}"
-        context = cache.get(cache_key)
 
-        if context and context.get("stations"):
-            return context
+        # A source check must never read or write this cache: a cached context
+        # would report OK while the source is down, and a check's context
+        # should not become the ingestion path's.
+        if self.use_cache:
+            context = cache.get(cache_key)
+
+            if context and context.get("stations"):
+                return context
 
         path = "get_context"
         context = self.post(path)
 
-        # cache for 1 hour
-        cache.set(cache_key, context, 3600)
+        if self.use_cache:
+            cache.set(cache_key, context, CONTEXT_CACHE_TIMEOUT)
+
         return context
 
     def get_observation_data(self, station_code, observations, start_date, end_date):

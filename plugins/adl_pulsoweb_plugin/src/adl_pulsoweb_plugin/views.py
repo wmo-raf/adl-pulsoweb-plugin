@@ -1,14 +1,13 @@
 from django.shortcuts import render
 from rest_framework.generics import get_object_or_404
 
-from .client import PulsoWebClient
 from .models import PulsoWebConnection
 
 
 def get_pulsoweb_granularities(request, connection_id):
     conn = get_object_or_404(PulsoWebConnection, pk=connection_id)
 
-    client = PulsoWebClient(conn.api_base_url, conn.api_token, conn.id)
+    client = conn.get_api_client()
 
     data = client.get_granularities()
 
@@ -23,7 +22,7 @@ def get_pulsoweb_granularities(request, connection_id):
 def get_pulsoweb_granularity_observations(request, connection_id, gran_code):
     conn = get_object_or_404(PulsoWebConnection, pk=connection_id)
 
-    client = PulsoWebClient(conn.api_base_url, conn.api_token, conn.id)
+    client = conn.get_api_client()
 
     gran = client.get_granularity_by_code(gran_code)
 
@@ -41,7 +40,7 @@ def get_pulsoweb_granularity_observations(request, connection_id, gran_code):
 def get_pulsoweb_stations_for_observation(request, connection_id, obs_code):
     conn = get_object_or_404(PulsoWebConnection, pk=connection_id)
 
-    client = PulsoWebClient(conn.api_base_url, conn.api_token, conn.id)
+    client = conn.get_api_client()
 
     observation = client.get_observation_by_code(obs_code)
 
