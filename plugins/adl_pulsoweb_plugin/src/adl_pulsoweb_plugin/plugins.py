@@ -4,8 +4,6 @@ from datetime import timedelta
 from adl.core.registries import Plugin
 from django.utils import timezone as dj_timezone
 
-from .client import PulsoWebClient
-
 logger = logging.getLogger(__name__)
 
 
@@ -34,11 +32,7 @@ class PulsoWebPlugin(Plugin):
 
         logger.info(f"[ADL_PULSOWEB_PLUGIN] Starting data processing for {network_conn_name}.")
 
-        pulsoweb_client = PulsoWebClient(
-            network_connection.api_base_url,
-            network_connection.api_token,
-            network_connection.id
-        )
+        pulsoweb_client = network_connection.get_api_client()
 
         observation_codes = network_connection.observation_codes
 

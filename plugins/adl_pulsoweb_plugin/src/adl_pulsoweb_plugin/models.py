@@ -7,6 +7,7 @@ from modelcluster.fields import ParentalKey
 from wagtail.admin.panels import MultiFieldPanel, FieldPanel, InlinePanel
 from wagtail.models import Orderable
 
+from .client import PulsoWebClient
 from .validators import validate_start_date
 
 
@@ -27,6 +28,26 @@ class PulsoWebConnection(NetworkConnection):
     class Meta:
         verbose_name = _("PulsoWeb Connection")
         verbose_name_plural = _("PulsoWeb Connections")
+
+    def get_api_client(self, use_cache=True, timeout=None, retries=None):
+        """
+        Returns a client for this connection's PulsoWeb API.
+
+        The defaults reproduce the ingestion path's behaviour exactly, so
+        nothing changes for existing deployments. Source checks pass
+        use_cache=False, timeout=5, retries=0 to stay inside the diagnostic
+        probe's budget and to avoid reading a cached context as evidence that
+        the source is up.
+        """
+
+        return PulsoWebClient(
+            self.api_base_url,
+            self.api_token,
+            self.id,
+            use_cache=use_cache,
+            timeout=timeout,
+            retries=retries,
+        )
 
     def get_extra_model_admin_links(self):
         columns = [
