@@ -15,6 +15,36 @@ DEFAULT_TIMEOUT = (10, 60)
 
 CONTEXT_CACHE_TIMEOUT = 3600
 
+# The path get_context() dials, relative to the connection's API base URL.
+CONTEXT_PATH = "get_context"
+
+# The shared status table, as literal strings — the failure vocabulary is
+# never imported, so a typo degrades to unclassified rather than coupling
+# this plugin to a core module that may not exist on the deployed release.
+# Codes absent from it decline a category: 400 and 422 are our own malformed
+# request, 429 is our polling schedule, and a 3xx says nothing about the
+# source. UNKNOWN is never stamped — declining stays revisable.
+STATUS_CATEGORIES = {
+    401: "AUTH_FAILED",
+    403: "PERMISSION_DENIED",
+    404: "PATH_NOT_FOUND",
+}
+
+
+def category_for_status(status_code):
+    """
+    Returns the failure category for an HTTP status the server sent, or None
+    where no category can honestly be claimed.
+    """
+
+    if status_code in STATUS_CATEGORIES:
+        return STATUS_CATEGORIES[status_code]
+
+    if 500 <= status_code <= 599:
+        return "PROTOCOL_ERROR"
+
+    return None
+
 
 class PulsoWebClient:
     def __init__(self, baseurl, token, connection_id, use_cache=True, timeout=None, retries=None):
@@ -186,8 +216,7 @@ class PulsoWebClient:
             if context and context.get("stations"):
                 return context
 
-        path = "get_context"
-        context = self.post(path)
+        context = self.post(CONTEXT_PATH)
 
         if self.use_cache:
             cache.set(cache_key, context, CONTEXT_CACHE_TIMEOUT)
