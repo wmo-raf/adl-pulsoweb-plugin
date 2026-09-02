@@ -1,0 +1,79 @@
+# Screenshot manifest for the ADL PulsoWeb Plugin guide (docs/guide.md).
+# Regenerate from the adl repo:  scripts/capture-plugin-docs.sh ../adl-plugins/adl-pulsoweb-plugin
+# Fixture: docs/screenshots/fixture.json (connection 1 = "PulsoWeb (demo)", station link 1 = DEMO001).
+# No credentials needed: the stack includes a stub PulsoWeb API (docs/screenshots/compose.mock.yml
+# + docs/screenshots/mock-api/), so the metadata explorer, the collection cycle and the source
+# checks are all real answers from a real HTTP round trip. Export PULSOWEB_API_BASE_URL /
+# PULSOWEB_API_TOKEN / PULSOWEB_STATION_CODE_* in docs/screenshots/credentials.env to run the
+# same fixture against a live account instead.
+# Format: defaults + screenshots (name/url/setup/callouts/capture), run by adl's
+# docs/screenshots/capture/capture.py; output derives from name: docs/images/<name>.png.
+# Callouts are numbered badges/outlines only — never text in images.
+
+defaults:
+  viewport:
+  - 1440
+  - 900
+  padding: 12
+screenshots:
+- name: pulsoweb_connection_form
+  url: /pulsowebconnection/edit/1/
+  setup:
+  - fill: { selector: '#id_api_token', value: '••••••••••••' }
+  callouts:
+  - badge:
+      target: '#id_api_base_url'
+      n: 1
+  - badge:
+      target: '#id_api_token'
+      n: 2
+  capture:
+    selector: "#w-editor-form"
+- name: pulsoweb_station_link_form
+  url: /pulsowebstationlink/edit/1/
+  callouts:
+  - badge:
+      target: '#id_pulsoweb_station_code'
+      n: 1
+  - badge:
+      target: '#id_start_date'
+      n: 2
+  capture:
+    selector: "#w-editor-form"
+- name: pulsoweb_view_metadata_button
+  url: /connections/
+  setup:
+  # The row's "More options" menu holds the link. Wagtail's w-dropdown controller
+  # keeps the menu content out of the DOM until the toggle is clicked, so it has
+  # to be opened before the link exists to highlight -- inspecting the page
+  # without clicking shows an empty shell, which is not a bug.
+  - click: 'table .w-dropdown__toggle'
+  - wait_until: "document.querySelectorAll('a[href*=\"adl-pulsoweb-plugin/granularity/\"]').length > 0"
+  callouts:
+  - highlight: a[href*="adl-pulsoweb-plugin/granularity/"]
+  capture:
+    # the plugin's panel; the crop grows to take in the open menu, since the
+    # highlight on it is an annotation and annotations are part of the shot
+    selector: '.plugin-panel'
+- name: pulsoweb_granularities_list
+  url: /adl-pulsoweb-plugin/granularity/1/
+  capture:
+    selector: main
+- name: pulsoweb_granularity_detail
+  url: /adl-pulsoweb-plugin/granularity/1/32/
+  capture:
+    selector: main
+- name: pulsoweb_stations_list
+  url: /adl-pulsoweb-plugin/stations/1/32000/
+  capture:
+    selector: main
+- name: pulsoweb_ingestion_diagnostic
+  url: /monitoring/connection/1/health/
+  callouts:
+  - highlight: .health-probe-form button
+  capture:
+    selector: .health-diagnostic
+- name: pulsoweb_station_source_check
+  url: /pulsowebstationlink/inspect/1/
+  capture:
+    selector: ":nth-match(.collection-status, 2)"

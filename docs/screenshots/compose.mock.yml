@@ -1,0 +1,22 @@
+# Stub PulsoWeb API for the documentation screenshot harness
+# (merged into the capture stack by adl/scripts/capture-plugin-docs.sh).
+#
+# The network alias is a dotted name under .test (the TLD RFC 6761 reserves for
+# exactly this), so the hostname in the captured diagnostics reads like a real
+# service without impersonating one — and so the same fixture works unchanged if
+# api_base_url is ever tightened from a CharField to a URLField, which rejects
+# both underscores and dotless hosts.
+services:
+  mock-pulsoweb:
+    build: ./docs/screenshots/mock-api
+    image: adl-docs-mock-pulsoweb
+    container_name: adl-pulsoweb-plugin-docs-mock-api
+    environment:
+      MOCK_TOKEN: demo-token
+    networks:
+      default:
+        aliases:
+          - api.pulsoweb.test
+  adl:
+    depends_on:
+      - mock-pulsoweb

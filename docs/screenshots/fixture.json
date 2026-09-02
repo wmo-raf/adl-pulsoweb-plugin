@@ -1,0 +1,74 @@
+{
+  "capture": {
+    "connection": "PulsoWeb (demo)",
+    "ingest": true,
+    "probe": true,
+    "station_checks": [
+      "DEMO001"
+    ],
+    "wait": 300
+  },
+  "connection": {
+    "model": "adl_pulsoweb_plugin.PulsoWebConnection",
+    "fields": {
+      "name": "PulsoWeb (demo)",
+      "plugin": "adl_pulsoweb_plugin",
+      "stations_timezone": "Africa/Bamako",
+      "plugin_processing_interval": 1,
+      "api_base_url": "$ENV:PULSOWEB_API_BASE_URL|http://api.pulsoweb.test:8000/rest",
+      "api_token": "$ENV:PULSOWEB_API_TOKEN|demo-token"
+    },
+    "children": {
+      "variable_mappings": [
+        {
+          "adl_parameter": "Air Temperature",
+          "pulsoweb_parameter_code": "32000",
+          "pulsoweb_parameter_unit": "degC"
+        },
+        {
+          "adl_parameter": "Relative Humidity",
+          "pulsoweb_parameter_code": "32008",
+          "pulsoweb_parameter_unit": "percent"
+        },
+        {
+          "adl_parameter": "Atmospheric Pressure",
+          "pulsoweb_parameter_code": "32015",
+          "pulsoweb_parameter_unit": "hPa"
+        },
+        {
+          "adl_parameter": "Precipitation",
+          "pulsoweb_parameter_code": "32213",
+          "pulsoweb_parameter_unit": "mm"
+        },
+        {
+          "adl_parameter": "Wind Speed",
+          "pulsoweb_parameter_code": "32028",
+          "pulsoweb_parameter_unit": "m/s"
+        },
+        {
+          "adl_parameter": "Wind Direction",
+          "pulsoweb_parameter_code": "32030",
+          "pulsoweb_parameter_unit": "degree"
+        }
+      ]
+    }
+  },
+  "station_links": [
+    {
+      "model": "adl_pulsoweb_plugin.PulsoWebStationLink",
+      "station": "DEMO001",
+      "fields": {
+        "pulsoweb_station_code": "$ENV:PULSOWEB_STATION_CODE_1|1001",
+        "start_date": "$NOW-1d"
+      }
+    },
+    {
+      "model": "adl_pulsoweb_plugin.PulsoWebStationLink",
+      "station": "DEMO002",
+      "fields": {
+        "pulsoweb_station_code": "$ENV:PULSOWEB_STATION_CODE_2|1002",
+        "start_date": "$NOW-1d"
+      }
+    }
+  ]
+}
