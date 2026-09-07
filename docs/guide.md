@@ -1,3 +1,10 @@
+---
+adl_plugin:
+  name: ADL PulsoWeb Plugin
+  connects_to: Pulsonic's PulsoWeb API
+  category: general
+  choose_when: Your stations use Pulsonic / PulsoWeb.
+---
 # ADL PulsoWeb Plugin
 
 Collects observation data from **Pulsonic** automatic weather stations through the
@@ -30,7 +37,7 @@ Niger, Mauritania and Sierra Leone (see the
 
 ## Prerequisites
 
-- A running ADL instance (see the ADL installation guide).
+- A running ADL instance (see [Installation](https://adl-tool.readthedocs.io/en/latest/installation.html)).
 - A **PulsoWeb API token**, issued by Pulsonic for your PulsoWeb account.
 - The **API base URL** for your service. The default is
   `https://app.pulsonic.com/rest`; some deployments use a country-specific
@@ -42,8 +49,8 @@ Niger, Mauritania and Sierra Leone (see the
 
 ## Installation
 
-Installed like any ADL plugin — see the core *Plugin Installation* page for all
-methods. The `plugins.toml` entry:
+Installed like any ADL plugin — see [Plugin Installation](https://adl-tool.readthedocs.io/en/latest/developer_guide/plugins/plugin_installation.html) for
+all methods. The `plugins.toml` entry:
 
 ```toml
 [[plugins]]
@@ -57,8 +64,8 @@ After rebuild/restart, confirm with `docker compose exec adl list-plugins`.
 ## Connection configuration
 
 In the ADL admin, create a new **PulsoWeb Connection**. Base connection fields
-(name, network, plugin processing settings) are described in the core user
-guide. Plugin-specific fields:
+(name, network, plugin processing settings) are described in
+[Manage Connections](https://adl-tool.readthedocs.io/en/latest/user_guide/manage_connections.html). Plugin-specific fields:
 
 | Field | Required | Default | Description |
 |---|---|---|---|
@@ -147,6 +154,10 @@ Each code links onward to the stations reporting it.
 
 ![Observation codes for a granularity](images/pulsoweb_granularity_detail.png)
 
+The screenshot shows the first rows only; the real table runs to several dozen
+observation codes for a typical granularity. Use the column sort to bring the
+one you are mapping to the top.
+
 ### Step 3 — Stations reporting an observation
 
 For one observation, this page shows the station count and a sortable table of
@@ -180,8 +191,9 @@ stations by name, take the code.
 ## Source checks / diagnostics
 
 The plugin implements the ADL source-check contracts, so the core's monitoring
-screens can tell network faults, credential faults and configuration faults
-apart *for this connection specifically*. The screens below are rendered by
+screens — described in [Monitoring & Diagnostics](https://adl-tool.readthedocs.io/en/latest/user_guide/monitoring_and_diagnostics.html) — can tell network
+faults, credential faults and configuration faults apart *for this connection
+specifically*. The screens below are rendered by
 the ADL core, but what they display for a PulsoWeb connection comes from this
 plugin — this section shows exactly what you will see and what each message
 means.

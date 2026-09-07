@@ -63,6 +63,10 @@ screenshots:
   url: /adl-pulsoweb-plugin/granularity/1/32/
   capture:
     selector: main
+    # The full table runs to ~3700px of near-identical rows. Fifteen rows are
+    # enough to show its shape and the columns the guide names; the guide says
+    # the list continues.
+    max_height: 960
 - name: pulsoweb_stations_list
   url: /adl-pulsoweb-plugin/stations/1/32000/
   capture:
